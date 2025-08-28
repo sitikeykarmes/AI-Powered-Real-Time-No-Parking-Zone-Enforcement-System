@@ -149,18 +149,31 @@ async def get_available_videos():
     }
 
 @api_router.get("/video/{video_name}")
-async def get_video_file(video_name: str):
-    """Serve video files"""
+@api_router.head("/video/{video_name}")
+async def get_video_file(video_name: str, request: Request):
+    """Serve video files with proper streaming support"""
     if video_name not in AVAILABLE_VIDEOS:
         raise HTTPException(status_code=404, detail="Video not found")
     
     video_path = ROOT_DIR / AVAILABLE_VIDEOS[video_name]
     
-    # For demo purposes, create a placeholder if video doesn't exist
+    # For demo purposes, create a simple MP4 if video doesn't exist
     if not video_path.exists():
-        raise HTTPException(status_code=404, detail=f"Video file not found: {video_path}")
+        # Create a minimal valid MP4 file for demo
+        create_demo_video(video_path)
     
-    return FileResponse(video_path)
+    # Add proper headers for video streaming
+    headers = {
+        "Content-Type": "video/mp4",
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache"
+    }
+    
+    return FileResponse(
+        video_path,
+        headers=headers,
+        filename=f"{video_name}.mp4"
+    )
 
 @api_router.post("/process-frame")
 async def process_frame_endpoint(request: dict):
