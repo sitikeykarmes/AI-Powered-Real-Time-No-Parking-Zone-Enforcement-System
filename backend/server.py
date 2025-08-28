@@ -300,4 +300,8 @@ async def shutdown_db_client():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    port = int(os.environ.get('PORT', 8001))
+    print(f"Starting server on http://0.0.0.0:{port}")
+    print(f"Environment: {os.environ.get('ENVIRONMENT', 'production')}")
+    print(f"Videos directory: {videos_dir}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
