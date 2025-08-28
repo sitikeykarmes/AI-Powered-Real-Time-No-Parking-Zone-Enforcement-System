@@ -11,10 +11,17 @@ const VideoPlayer = ({
   showOverlays = true,
   style = {} 
 }) => {
-  const [status, setStatus] = useState({});
   const [detectionData, setDetectionData] = useState(null);
-  const videoRef = useRef(null);
   const detectionInterval = useRef(null);
+  
+  // Get video URL
+  const videoUrl = videoName ? apiService.getVideoUrl(videoName) : null;
+  
+  // Create video player instance
+  const player = useVideoPlayer(videoUrl, (player) => {
+    player.loop = true;
+    player.muted = false;
+  });
 
   // Mock detection data generator (similar to web app)
   const generateMockDetection = () => {
