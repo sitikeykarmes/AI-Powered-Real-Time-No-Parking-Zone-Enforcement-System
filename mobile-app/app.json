@@ -44,8 +44,11 @@
           "color": "#007AFF"
         }
       ],
-      "expo-av"
+      "expo-video"
     ],
+    "extra": {
+      "backendUrl": process.env.EXPO_PUBLIC_BACKEND_URL
+    },
     "notification": {
       "icon": "./assets/notification-icon.png",
       "color": "#007AFF"
