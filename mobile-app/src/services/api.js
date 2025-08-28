@@ -1,8 +1,16 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-// Use the same backend URL as the web app
-const BACKEND_URL = 'https://mobile-backend-sync.preview.emergentagent.com';
+// Get backend URL from environment variables
+// For local development, this will use .env.local
+// For production, this will use .env.production
+const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || 
+                   process.env.EXPO_PUBLIC_BACKEND_URL || 
+                   'http://192.168.1.100:8001'; // Fallback to local
+
 const API_BASE = `${BACKEND_URL}/api`;
+
+console.log('API connecting to:', BACKEND_URL);
 
 const api = axios.create({
   baseURL: API_BASE,
