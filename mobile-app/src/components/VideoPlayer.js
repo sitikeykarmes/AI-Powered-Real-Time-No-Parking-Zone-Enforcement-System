@@ -68,7 +68,7 @@ const VideoPlayer = ({
 
   // Start/stop detection simulation
   useEffect(() => {
-    if (status.isLoaded && status.isPlaying) {
+    if (player && player.status === 'readyToPlay') {
       // Start mock detection every 2 seconds
       detectionInterval.current = setInterval(generateMockDetection, 2000);
     } else {
@@ -84,7 +84,7 @@ const VideoPlayer = ({
         clearInterval(detectionInterval.current);
       }
     };
-  }, [status.isLoaded, status.isPlaying, videoName]);
+  }, [player?.status, videoName]);
 
   // Handle video load error
   const handleLoadError = (error) => {
