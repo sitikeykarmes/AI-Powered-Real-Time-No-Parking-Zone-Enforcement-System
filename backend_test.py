@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class ParkingSystemAPITester:
-    def __init__(self, base_url="https://parkwiz.preview.emergentagent.com"):
+    def __init__(self, base_url="https://surveillance-viewer.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0
