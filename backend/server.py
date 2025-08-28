@@ -15,7 +15,21 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 import uuid
-from parking_detection import ParkingDetectionSystem
+
+# Try to import parking detection, fallback to mock for local development
+try:
+    from parking_detection import ParkingDetectionSystem
+    PARKING_DETECTION_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Parking detection not available ({e}). Using mock detection for local development.")
+    PARKING_DETECTION_AVAILABLE = False
+    
+    # Mock parking detection system for local development
+    class MockParkingDetectionSystem:
+        def reset_alerts(self):
+            return True
+    
+    ParkingDetectionSystem = MockParkingDetectionSystem
 
 ROOT_DIR = Path(__file__).parent
 
