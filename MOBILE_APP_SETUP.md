@@ -53,7 +53,7 @@ npx expo start --tunnel
 ## 🖥️ **Current Status**
 
 ✅ **Mobile App Server Running**: `http://localhost:8081`
-✅ **Backend API Connected**: `https://surveillance-viewer.preview.emergentagent.com`
+✅ **Backend API Connected**: `https://mobile-backend-sync.preview.emergentagent.com`
 ✅ **All Dependencies Installed**
 
 ## 📱 **Testing the App**
@@ -211,7 +211,7 @@ npx expo start --reset-cache
 
 The mobile app connects to your existing backend:
 
-- **Backend URL**: `https://surveillance-viewer.preview.emergentagent.com`
+- **Backend URL**: `https://mobile-backend-sync.preview.emergentagent.com`
 - **API Endpoints**: All `/api/*` routes
 - **Video Streaming**: Direct video URLs
 - **Real-time Updates**: Polling every 30 seconds

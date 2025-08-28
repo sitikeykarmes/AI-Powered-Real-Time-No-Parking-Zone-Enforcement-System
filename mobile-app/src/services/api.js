@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use the same backend URL as the web app
-const BACKEND_URL = 'https://surveillance-viewer.preview.emergentagent.com';
+const BACKEND_URL = 'https://mobile-backend-sync.preview.emergentagent.com';
 const API_BASE = `${BACKEND_URL}/api`;
 
 const api = axios.create({

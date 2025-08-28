@@ -268,7 +268,7 @@ metadata:
   test_sequence: 1
   run_ui: true
   mobile_app_url: "http://localhost:8081"
-  backend_url: "https://surveillance-viewer.preview.emergentagent.com"
+  backend_url: "https://mobile-backend-sync.preview.emergentagent.com"
 
 test_plan:
   current_focus:

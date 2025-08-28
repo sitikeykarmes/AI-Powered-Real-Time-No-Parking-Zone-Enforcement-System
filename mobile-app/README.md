@@ -51,7 +51,7 @@ A React Native mobile application for real-time CCTV parking detection and monit
 ## Backend Integration
 
 Connects to existing FastAPI backend:
-- **Base URL**: `https://surveillance-viewer.preview.emergentagent.com`
+- **Base URL**: `https://mobile-backend-sync.preview.emergentagent.com`
 - **API Endpoints**:
   - `GET /api/videos` - Available video feeds
   - `GET /api/video/{name}` - Video stream
@@ -196,7 +196,7 @@ expo build:android --release-channel production
 ### Environment Variables
 Backend URL configured in `src/services/api.js`:
 ```javascript
-const BACKEND_URL = 'https://surveillance-viewer.preview.emergentagent.com';
+const BACKEND_URL = 'https://mobile-backend-sync.preview.emergentagent.com';
 ```
 
 ### Notification Setup
