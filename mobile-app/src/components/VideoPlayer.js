@@ -92,24 +92,19 @@ const VideoPlayer = ({
     Alert.alert('Video Error', 'Failed to load video. Please try again.');
   };
 
-  if (!videoName) {
+  if (!videoName || !videoUrl) {
     return <View style={[styles.container, style]} />;
   }
 
-  const videoUrl = apiService.getVideoUrl(videoName);
-
   return (
     <View style={[styles.container, style]}>
-      <Video
-        ref={videoRef}
+      <VideoView
         style={styles.video}
-        source={{ uri: videoUrl }}
-        useNativeControls
-        resizeMode="contain"
-        isLooping
-        onPlaybackStatusUpdate={setStatus}
-        onError={handleLoadError}
-        shouldPlay={false}
+        player={player}
+        allowsFullscreen
+        allowsPictureInPicture
+        nativeControls
+        contentFit="contain"
       />
       
       {/* Overlay for detection data - This would be implemented with SVG or Canvas */}
