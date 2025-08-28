@@ -18,7 +18,14 @@ import uuid
 from parking_detection import ParkingDetectionSystem
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+
+# Load environment file - prefer .env.local for local development
+if (ROOT_DIR / '.env.local').exists():
+    load_dotenv(ROOT_DIR / '.env.local')
+    print("Loaded .env.local for local development")
+else:
+    load_dotenv(ROOT_DIR / '.env')
+    print("Loaded .env for production")
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
