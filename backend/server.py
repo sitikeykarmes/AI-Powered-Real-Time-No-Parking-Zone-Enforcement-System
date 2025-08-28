@@ -106,6 +106,30 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
+def create_demo_video(video_path: Path):
+    """Create a minimal valid MP4 file for demo purposes"""
+    try:
+        # Create directory if it doesn't exist
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create a simple 1-second black video using OpenCV
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(str(video_path), fourcc, 1.0, (640, 480))
+        
+        # Create a black frame
+        frame = cv2.zeros((480, 640, 3), dtype=cv2.uint8)
+        
+        # Write a few frames
+        for _ in range(5):
+            out.write(frame)
+        
+        out.release()
+        logger.info(f"Created demo video: {video_path}")
+    except Exception as e:
+        logger.error(f"Failed to create demo video {video_path}: {e}")
+        # Create an empty file as fallback
+        video_path.touch()
+
 # Video-related routes
 @api_router.get("/videos")
 async def get_available_videos():
