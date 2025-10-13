@@ -40,17 +40,17 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
+          "icon": "./assets/icon.png",
           "color": "#007AFF"
         }
       ],
       "expo-video"
     ],
     "extra": {
-      "backendUrl": process.env.EXPO_PUBLIC_BACKEND_URL
+      "backendUrl": "http://172.20.163.196:8001"
     },
     "notification": {
-      "icon": "./assets/notification-icon.png",
+      "icon": "./assets/icon.png",
       "color": "#007AFF"
     }
   }
