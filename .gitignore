@@ -84,3 +84,12 @@ android-sdk/
 
 backend/videos/*
 backend/videos/
+
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.zip
+*.h5
+*.pt
+*.pkl
