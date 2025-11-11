@@ -94,7 +94,7 @@ backend/videos/
 *.pt
 *.pkl
 
-
+mobile-app/yarn.lock
 backend/videos/
 mobile-app/node_modules/
 node_modules/
