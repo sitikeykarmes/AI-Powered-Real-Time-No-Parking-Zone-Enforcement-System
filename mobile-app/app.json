@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Smart Parking Mobile",
-    "slug": "smart-parking-mobile",
+    "name": "AI-Parking Assistant",
+    "slug": "ai-parking-assistant",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -47,7 +47,7 @@
       "expo-video"
     ],
     "extra": {
-      "backendUrl": "http://172.20.163.196:8001"
+      "backendUrl": "http://172.20.10.3:8001"
     },
     "notification": {
       "icon": "./assets/icon.png",

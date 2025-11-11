@@ -1,5 +1,6 @@
+# server.py - Auto-detect videos from folder
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -13,27 +14,17 @@ import time
 from datetime import datetime
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
+import numpy as np
+import base64
 
-# Try to import parking detection, fallback to mock for local development
-try:
-    from parking_detection import ParkingDetectionSystem
-    PARKING_DETECTION_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Parking detection not available ({e}). Using mock detection for local development.")
-    PARKING_DETECTION_AVAILABLE = False
-    
-    # Mock parking detection system for local development
-    class MockParkingDetectionSystem:
-        def reset_alerts(self):
-            return True
-    
-    ParkingDetectionSystem = MockParkingDetectionSystem
+# Import the real parking detection system
+from parking_detection import ParkingDetectionSystem
 
 ROOT_DIR = Path(__file__).parent
 
-# Load environment file - prefer .env.local for local development
+# Load environment file
 if (ROOT_DIR / '.env.local').exists():
     load_dotenv(ROOT_DIR / '.env.local')
     print("Loaded .env.local for local development")
@@ -41,35 +32,83 @@ else:
     load_dotenv(ROOT_DIR / '.env')
     print("Loaded .env for production")
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ.get('DB_NAME', 'parking_db')]
 
-# Create the main app without a prefix
+# Create the main app
 app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 # Initialize parking detection system
-parking_system = ParkingDetectionSystem()
+def initialize_parking_system():
+    """Initialize parking detection system with model paths"""
+    model_path = os.environ.get(
+        'PARKING_MODEL_PATH',
+        str(ROOT_DIR / 'models' / 'parking_model_train22.pkl')
+    )
+    csv_path = os.environ.get(
+        'PARKING_CSV_PATH',
+        str(ROOT_DIR / 'models' / 'yolo_features_train22.csv')
+    )
 
-# Create videos directory if it doesn't exist
+    logger.info("Initializing parking system with:")
+    logger.info(f"  Model path: {model_path}")
+    logger.info(f"  CSV path: {csv_path}")
+
+    if not Path(model_path).exists():
+        raise RuntimeError(f"Model file not found at {model_path}")
+    
+    system = ParkingDetectionSystem(model_path=model_path, csv_path=csv_path)
+    logger.info("✓ Parking detection system initialized successfully")
+    return system
+
+parking_system = initialize_parking_system()
+
+# Create videos directory
 videos_dir = ROOT_DIR / "videos"
 videos_dir.mkdir(exist_ok=True)
 
-# Available videos mapping
-AVAILABLE_VIDEOS = {
-    "AB-1 Parking": "videos/ab1.mp4",
-    "AB-3 Parking": "videos/ab3.mp4", 
-    "Ab-3 Front": "videos/ab3_front.mp4",
-    "GymKhana": "videos/gymkhana_1.mp4",
-    "AB-1 Front": "videos/ab1_front.mp4",
-    "Aavin": "videos/aavin.mp4",
-    "Vmart": "videos/Vmart_1.mp4",
-    "Sigma Block": "videos/sigmablock.mp4"
-}
+# AUTO-DETECT VIDEOS FROM FOLDER
+def auto_detect_videos():
+    """
+    Automatically detect all video files in the videos folder.
+    Supports: .mp4, .avi, .mov, .mkv
+    """
+    video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.MP4', '.AVI', '.MOV', '.MKV']
+    available_videos = {}
+    
+    logger.info(f"Scanning videos directory: {videos_dir}")
+    
+    if not videos_dir.exists():
+        logger.warning(f"Videos directory does not exist: {videos_dir}")
+        return available_videos
+    
+    # Scan for video files
+    for video_file in videos_dir.iterdir():
+        if video_file.is_file() and video_file.suffix in video_extensions:
+            # Use filename without extension as the display name
+            display_name = video_file.stem.replace('_', ' ').replace('-', ' ')
+            relative_path = f"videos/{video_file.name}"
+            
+            available_videos[display_name] = relative_path
+            logger.info(f"  Found video: {display_name} -> {relative_path}")
+    
+    logger.info(f"Total videos found: {len(available_videos)}")
+    return available_videos
+
+# Get available videos (auto-detected)
+AVAILABLE_VIDEOS = auto_detect_videos()
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -81,19 +120,20 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(json.dumps(message))
-            except:
-                # Remove broken connections
-                self.active_connections.remove(connection)
+            except Exception:
+                if connection in self.active_connections:
+                    self.active_connections.remove(connection)
 
 manager = ConnectionManager()
 
-# Models
+# Pydantic Models
 class StatusCheck(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     client_name: str
@@ -110,10 +150,31 @@ class ViolationLog(BaseModel):
     duration: float
     violation_type: str = "no_parking_zone"
 
+class VideoFrameProcessRequest(BaseModel):
+    video_name: str
+    timestamp: float = 0.0
+    alert_threshold: Optional[float] = 5.0
+
+class FrameProcessRequest(BaseModel):
+    frame_data: str
+    video_name: Optional[str] = "unknown"
+    alert_threshold: Optional[float] = 5.0
+
 # Basic routes
 @api_router.get("/")
 async def root():
     return {"message": "Parking Detection System API"}
+
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    stats = parking_system.get_statistics()
+    return {
+        "status": "healthy",
+        "parking_system": "active",
+        "statistics": stats,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -127,43 +188,18 @@ async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
 
-def create_demo_video(video_path: Path):
-    """Create a minimal valid MP4 file for demo purposes"""
-    try:
-        # Create directory if it doesn't exist
-        video_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Create a simple 1-second black video using OpenCV
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(str(video_path), fourcc, 1.0, (640, 480))
-        
-        # Create a black frame
-        frame = cv2.zeros((480, 640, 3), dtype=cv2.uint8)
-        
-        # Write a few frames
-        for _ in range(5):
-            out.write(frame)
-        
-        out.release()
-        logger.info(f"Created demo video: {video_path}")
-    except Exception as e:
-        logger.error(f"Failed to create demo video {video_path}: {e}")
-        # Create an empty file as fallback
-        video_path.touch()
-
-# Video-related routes
+# Video routes
 @api_router.get("/videos")
 async def get_available_videos():
-    """Get list of available videos"""
-    available = {}
+    """Get list of available videos (auto-detected)"""
+    available: Dict[str, Dict[str, Any]] = {}
     for name, path in AVAILABLE_VIDEOS.items():
         full_path = ROOT_DIR / path
-        if full_path.exists():
-            available[name] = path
-        else:
-            # For demo purposes, we'll still return the path even if file doesn't exist
-            available[name] = path
-    
+        available[name] = {
+            "path": path,
+            "exists": full_path.exists(),
+            "size": full_path.stat().st_size if full_path.exists() else 0
+        }
     return {
         "videos": available,
         "total": len(available)
@@ -172,79 +208,190 @@ async def get_available_videos():
 @api_router.get("/video/{video_name}")
 @api_router.head("/video/{video_name}")
 async def get_video_file(video_name: str, request: Request):
-    """Serve video files with proper streaming support"""
+    """Serve video files with streaming support"""
     if video_name not in AVAILABLE_VIDEOS:
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     video_path = ROOT_DIR / AVAILABLE_VIDEOS[video_name]
-    
-    # For demo purposes, create a simple MP4 if video doesn't exist
     if not video_path.exists():
-        # Create a minimal valid MP4 file for demo
-        create_demo_video(video_path)
-    
-    # Add proper headers for video streaming
+        raise HTTPException(status_code=404, detail="Video file missing")
+
     headers = {
         "Content-Type": "video/mp4",
         "Accept-Ranges": "bytes",
         "Cache-Control": "no-cache"
     }
-    
+
     return FileResponse(
         video_path,
         headers=headers,
         filename=f"{video_name}.mp4"
     )
 
-@api_router.post("/process-frame")
-async def process_frame_endpoint(request: dict):
-    """Process a single frame for parking detection"""
+# Process video frame at specific timestamp
+@api_router.post("/process-video-frame")
+async def process_video_frame(request: VideoFrameProcessRequest):
+    """
+    Process a frame from video file at specific timestamp.
+    This is Solution 3 - backend processes video directly.
+    """
     try:
-        # This would typically receive base64 encoded frame data
-        # For now, we'll return mock data
+        start_time = time.time()
         
-        frame_data = request.get('frame_data')
-        video_name = request.get('video_name', 'unknown')
+        video_name = request.video_name
+        timestamp = request.timestamp
+        alert_threshold = request.alert_threshold
+
+        # Validate video exists
+        if video_name not in AVAILABLE_VIDEOS:
+            raise HTTPException(status_code=404, detail=f"Video '{video_name}' not found")
+
+        video_path = ROOT_DIR / AVAILABLE_VIDEOS[video_name]
+        if not video_path.exists():
+            raise HTTPException(status_code=404, detail=f"Video file missing: {video_path}")
+
+        logger.info(f"Processing frame from {video_name} at {timestamp}s")
+
+        # Open video and seek to timestamp
+        cap = cv2.VideoCapture(str(video_path))
         
-        # Mock processing result
-        result = {
-            'prediction': 'No Parking Zone',
-            'vehicles': [
-                {
-                    'id': 1,
-                    'bbox': [100, 100, 200, 200],
-                    'class': 'car',
-                    'confidence': 0.95,
-                    'duration': 3.5,
-                    'status': 'normal'
-                }
-            ],
-            'alerts': [],
-            'timestamp': time.time(),
-            'processing_time': 0.05
-        }
+        if not cap.isOpened():
+            raise ValueError(f"Failed to open video file: {video_path}")
+
+        # Get video properties
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
+        # Calculate frame number from timestamp
+        frame_number = int(timestamp * fps)
+        
+        # Ensure frame number is valid
+        if frame_number >= total_frames:
+            frame_number = total_frames - 1
+        
+        # Seek to specific frame
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        
+        # Read frame
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret or frame is None:
+            raise ValueError(f"Failed to read frame at timestamp {timestamp}s")
+
+        logger.info(f"Successfully extracted frame: shape={frame.shape}")
+
+        # Process frame with parking detection system
+        result = parking_system.process_frame(
+            frame,
+            alert_threshold_seconds=alert_threshold
+        )
+
+        # Add processing metadata
+        processing_time = time.time() - start_time
+        result['processing_time'] = processing_time
+        result['video_name'] = video_name
+        result['timestamp'] = timestamp
+        result['frame_number'] = frame_number
+        result['fps'] = fps
+
+        logger.info(f"Frame processed in {processing_time:.2f}s - "
+                   f"Prediction: {result.get('prediction')}, "
+                   f"Vehicles: {len(result.get('vehicles', []))}, "
+                   f"Violations: {result.get('total_violations', 0)}")
+
+        # Broadcast new alerts via WebSocket
+        if result.get('new_alerts'):
+            await manager.broadcast({
+                'type': 'new_alerts',
+                'data': result['new_alerts'],
+                'video_name': video_name,
+                'timestamp': time.time()
+            })
+
         return result
-        
+
     except Exception as e:
+        logger.error(f"Error processing video frame: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Legacy: Process frame from base64 data
+@api_router.post("/process-frame")
+async def process_frame_endpoint(request: FrameProcessRequest):
+    """Process a single frame from base64 data (legacy support)"""
+    try:
+        start_time = time.time()
+
+        # Decode base64 frame data
+        frame_data = request.frame_data
+        if ',' in frame_data:
+            frame_data = frame_data.split(',')[1]
+
+        frame_bytes = base64.b64decode(frame_data)
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            raise ValueError("Failed to decode frame")
+
+        # Process frame
+        result = parking_system.process_frame(
+            frame,
+            alert_threshold_seconds=request.alert_threshold
+        )
+
+        # Add metadata
+        processing_time = time.time() - start_time
+        result['processing_time'] = processing_time
+        result['video_name'] = request.video_name
+
+        # Broadcast new alerts
+        if result.get('new_alerts'):
+            await manager.broadcast({
+                'type': 'new_alerts',
+                'data': result['new_alerts'],
+                'timestamp': time.time()
+            })
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error processing frame: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/reset-alerts")
 async def reset_alerts():
     """Reset all parking violation alerts"""
     try:
+        # Clear violations from database
+        await db.violations.delete_many({})
+
+        # Reset system state
         parking_system.reset_alerts()
-        
-        # Broadcast reset to all connected clients
+
+        # Broadcast reset to clients
         await manager.broadcast({
             'type': 'alerts_reset',
             'timestamp': time.time()
         })
-        
-        return {"message": "Alerts reset successfully"}
+
+        return {"message": "Alerts reset successfully", "timestamp": time.time()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/statistics")
+async def get_statistics():
+    """Get current parking system statistics"""
+    try:
+        stats = parking_system.get_statistics()
+        return {
+            "statistics": stats,
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Violation routes
 @api_router.post("/violations", response_model=ViolationLog)
 async def log_violation(violation: ViolationLog):
     """Log a parking violation"""
@@ -252,7 +399,7 @@ async def log_violation(violation: ViolationLog):
         violation_dict = violation.dict()
         _ = await db.violations.insert_one(violation_dict)
         
-        # Broadcast violation to all connected clients
+        # Broadcast to connected clients
         await manager.broadcast({
             'type': 'new_violation',
             'data': violation_dict
@@ -263,34 +410,51 @@ async def log_violation(violation: ViolationLog):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/violations", response_model=List[ViolationLog])
-async def get_violations():
+async def get_violations(limit: int = 500):
     """Get all parking violations"""
     try:
-        violations = await db.violations.find().sort("timestamp", -1).to_list(100)
+        violations = await db.violations.find().sort("timestamp", -1).to_list(limit)
         return [ViolationLog(**violation) for violation in violations]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# WebSocket endpoint for real-time updates
+@api_router.delete("/violations/{violation_id}")
+async def delete_violation(violation_id: str):
+    """Delete a specific violation"""
+    try:
+        result = await db.violations.delete_one({"id": violation_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Violation not found")
+        return {"message": "Violation deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Keep connection alive and listen for messages
             data = await websocket.receive_text()
             message = json.loads(data)
-            
+
             if message.get('type') == 'ping':
                 await websocket.send_text(json.dumps({'type': 'pong'}))
-            
+            elif message.get('type') == 'request_stats':
+                stats = parking_system.get_statistics()
+                await websocket.send_text(json.dumps({
+                    'type': 'statistics',
+                    'data': stats
+                }))
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        manager.disconnect(websocket)
 
-# Include the router in the main app
+# Include router and middleware
 app.include_router(api_router)
 
-# Serve static files (videos)
 app.mount("/static", StaticFiles(directory=str(videos_dir)), name="static")
 
 app.add_middleware(
@@ -301,21 +465,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+@app.on_event("startup")
+async def startup_event():
+    logger.info("=" * 60)
+    logger.info("Parking Violation Alert System - Starting Up")
+    logger.info("=" * 60)
+    logger.info(f"Environment: {os.environ.get('ENVIRONMENT', 'production')}")
+    logger.info(f"Videos directory: {videos_dir}")
+    logger.info(f"Available videos: {len(AVAILABLE_VIDEOS)}")
+    for name in AVAILABLE_VIDEOS.keys():
+        logger.info(f"  - {name}")
+    logger.info("=" * 60)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    logger.info("Shutting down database connection...")
     client.close()
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get('PORT', 8001))
     print(f"Starting server on http://0.0.0.0:{port}")
-    print(f"Environment: {os.environ.get('ENVIRONMENT', 'production')}")
-    print(f"Videos directory: {videos_dir}")
     uvicorn.run(app, host="0.0.0.0", port=port)

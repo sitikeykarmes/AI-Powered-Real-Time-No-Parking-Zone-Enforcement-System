@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,10 @@ import {
   TouchableOpacity,
   FlatList,
   Switch,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as Notifications from 'expo-notifications';
-import apiService from '../services/api';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Notifications from "expo-notifications";
+import apiService from "../services/api";
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -23,28 +23,36 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const AlertItem = ({ alert, onDismiss }) => (
-  <View style={styles.alertItem}>
+const AlertItem = ({ alert, onDismiss, onPress }) => (
+  <TouchableOpacity
+    style={styles.alertItem}
+    onPress={() => onPress(alert)}
+    activeOpacity={0.7}
+  >
     <View style={styles.alertIcon}>
-      <Ionicons 
-        name="warning" 
-        size={24} 
-        color={alert.violation_type === 'no_parking_zone' ? '#FF3B30' : '#FF9500'} 
+      <Ionicons
+        name="warning"
+        size={24}
+        color={
+          alert.violation_type === "no_parking_zone" ? "#FF3B30" : "#FF9500"
+        }
       />
     </View>
     <View style={styles.alertContent}>
       <Text style={styles.alertTitle}>
         Vehicle #{alert.vehicle_id} - Violation
       </Text>
-      <Text style={styles.alertLocation}>
-        Location: {alert.location}
-      </Text>
+      <Text style={styles.alertLocation}>Location: {alert.location}</Text>
       <Text style={styles.alertDescription}>
         Parked in no-parking zone for {alert.duration?.toFixed(1) || 0}s
       </Text>
       <Text style={styles.alertTime}>
         {new Date(alert.timestamp).toLocaleString()}
       </Text>
+      <View style={styles.tapHint}>
+        <Ionicons name="hand-left" size={12} color="#007AFF" />
+        <Text style={styles.tapHintText}>Tap to view location</Text>
+      </View>
     </View>
     <View style={styles.alertActions}>
       <Text style={styles.alertDuration}>
@@ -52,47 +60,49 @@ const AlertItem = ({ alert, onDismiss }) => (
       </Text>
       <TouchableOpacity
         style={styles.dismissButton}
-        onPress={() => onDismiss(alert.id)}
+        onPress={(e) => {
+          e.stopPropagation(); // Prevent navigation when dismissing
+          onDismiss(alert.id);
+        }}
       >
         <Ionicons name="close-circle" size={20} color="#8e8e93" />
       </TouchableOpacity>
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
-const FilterButton = ({ title, active, onPress, color = '#007AFF' }) => (
+const FilterButton = ({ title, active, onPress, color = "#007AFF" }) => (
   <TouchableOpacity
     style={[
       styles.filterButton,
-      { backgroundColor: active ? color : '#f2f2f7' }
+      { backgroundColor: active ? color : "#f2f2f7" },
     ]}
     onPress={onPress}
   >
-    <Text style={[
-      styles.filterButtonText,
-      { color: active ? 'white' : '#1c1c1e' }
-    ]}>
+    <Text
+      style={[styles.filterButtonText, { color: active ? "white" : "#1c1c1e" }]}
+    >
       {title}
     </Text>
   </TouchableOpacity>
 );
 
-const AlertsScreen = () => {
+const AlertsScreen = ({ navigation }) => {
   const [alerts, setAlerts] = useState([]);
   const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'today', 'recent'
+  const [filter, setFilter] = useState("all"); // 'all', 'today', 'recent'
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'duration'
+  const [sortBy, setSortBy] = useState("newest"); // 'newest', 'oldest', 'duration'
 
   // Request notification permissions
   const requestNotificationPermissions = async () => {
     const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
+    if (status !== "granted") {
       Alert.alert(
-        'Notification Permission',
-        'Please enable notifications to receive parking violation alerts.'
+        "Notification Permission",
+        "Please enable notifications to receive parking violation alerts."
       );
     }
   };
@@ -103,7 +113,7 @@ const AlertsScreen = () => {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Parking Violation Detected!',
+        title: "Parking Violation Detected!",
         body: `Vehicle #${violation.vehicle_id} in no-parking zone at ${violation.location}`,
         data: { violationId: violation.id },
       },
@@ -115,16 +125,16 @@ const AlertsScreen = () => {
     try {
       setRefreshing(true);
       const response = await apiService.getViolations();
-      const alertsData = response.data.map(violation => ({
+      const alertsData = response.data.map((violation) => ({
         ...violation,
         id: violation.id || `${violation.vehicle_id}-${violation.timestamp}`,
       }));
-      
+
       setAlerts(alertsData);
       applyFilter(alertsData, filter);
     } catch (error) {
-      console.error('Error fetching alerts:', error);
-      Alert.alert('Error', 'Failed to load alerts');
+      console.error("Error fetching alerts:", error);
+      Alert.alert("Error", "Failed to load alerts");
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -136,16 +146,20 @@ const AlertsScreen = () => {
     const now = new Date();
 
     switch (filterType) {
-      case 'today':
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        filtered = alertsData.filter(alert => 
-          new Date(alert.timestamp) >= today
+      case "today":
+        const today = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate()
+        );
+        filtered = alertsData.filter(
+          (alert) => new Date(alert.timestamp) >= today
         );
         break;
-      case 'recent':
+      case "recent":
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        filtered = alertsData.filter(alert => 
-          new Date(alert.timestamp) >= oneDayAgo
+        filtered = alertsData.filter(
+          (alert) => new Date(alert.timestamp) >= oneDayAgo
         );
         break;
       default: // 'all'
@@ -154,10 +168,10 @@ const AlertsScreen = () => {
 
     // Apply sorting
     switch (sortBy) {
-      case 'oldest':
+      case "oldest":
         filtered.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         break;
-      case 'duration':
+      case "duration":
         filtered.sort((a, b) => (b.duration || 0) - (a.duration || 0));
         break;
       default: // 'newest'
@@ -168,17 +182,28 @@ const AlertsScreen = () => {
     setFilteredAlerts(filtered);
   };
 
+  const handleAlertPress = (alert) => {
+    // Navigate to Video Feed with the location from the alert
+    navigation.navigate("Video Feed", {
+      selectedVideo: alert.location,
+      fromAlert: true,
+      alertData: alert,
+    });
+  };
+
   const dismissAlert = (alertId) => {
     Alert.alert(
-      'Dismiss Alert',
-      'Are you sure you want to dismiss this alert?',
+      "Dismiss Alert",
+      "Are you sure you want to dismiss this alert?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Dismiss',
-          style: 'destructive',
+          text: "Dismiss",
+          style: "destructive",
           onPress: () => {
-            const updatedAlerts = alerts.filter(alert => alert.id !== alertId);
+            const updatedAlerts = alerts.filter(
+              (alert) => alert.id !== alertId
+            );
             setAlerts(updatedAlerts);
             applyFilter(updatedAlerts, filter);
           },
@@ -189,21 +214,21 @@ const AlertsScreen = () => {
 
   const clearAllAlerts = async () => {
     Alert.alert(
-      'Clear All Alerts',
-      'This will remove all alerts from the list. Are you sure?',
+      "Clear All Alerts",
+      "This will remove all alerts from the list. Are you sure?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Clear All',
-          style: 'destructive',
+          text: "Clear All",
+          style: "destructive",
           onPress: async () => {
             try {
               await apiService.resetAlerts();
               setAlerts([]);
               setFilteredAlerts([]);
             } catch (error) {
-              console.error('Error clearing alerts:', error);
-              Alert.alert('Error', 'Failed to clear alerts');
+              console.error("Error clearing alerts:", error);
+              Alert.alert("Error", "Failed to clear alerts");
             }
           },
         },
@@ -227,7 +252,7 @@ const AlertsScreen = () => {
 
     // Set up auto-refresh every 30 seconds
     const interval = setInterval(fetchAlerts, 30000);
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -256,8 +281,14 @@ const AlertsScreen = () => {
           <Text style={styles.statLabel}>Filtered</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: '#34C759' }]}>
-            {alerts.filter(a => new Date(a.timestamp) > new Date(Date.now() - 24*60*60*1000)).length}
+          <Text style={[styles.statNumber, { color: "#34C759" }]}>
+            {
+              alerts.filter(
+                (a) =>
+                  new Date(a.timestamp) >
+                  new Date(Date.now() - 24 * 60 * 60 * 1000)
+              ).length
+            }
           </Text>
           <Text style={styles.statLabel}>Recent</Text>
         </View>
@@ -268,19 +299,19 @@ const AlertsScreen = () => {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <FilterButton
             title="All"
-            active={filter === 'all'}
-            onPress={() => handleFilterChange('all')}
+            active={filter === "all"}
+            onPress={() => handleFilterChange("all")}
           />
           <FilterButton
             title="Today"
-            active={filter === 'today'}
-            onPress={() => handleFilterChange('today')}
+            active={filter === "today"}
+            onPress={() => handleFilterChange("today")}
             color="#34C759"
           />
           <FilterButton
             title="Recent"
-            active={filter === 'recent'}
-            onPress={() => handleFilterChange('recent')}
+            active={filter === "recent"}
+            onPress={() => handleFilterChange("recent")}
             color="#FF9500"
           />
         </ScrollView>
@@ -293,15 +324,18 @@ const AlertsScreen = () => {
           <TouchableOpacity
             style={styles.sortButton}
             onPress={() => {
-              const sorts = ['newest', 'oldest', 'duration'];
+              const sorts = ["newest", "oldest", "duration"];
               const currentIndex = sorts.indexOf(sortBy);
               const nextSort = sorts[(currentIndex + 1) % sorts.length];
               handleSortChange(nextSort);
             }}
           >
             <Text style={styles.sortButtonText}>
-              {sortBy === 'newest' ? 'Newest' : 
-               sortBy === 'oldest' ? 'Oldest' : 'Duration'}
+              {sortBy === "newest"
+                ? "Newest"
+                : sortBy === "oldest"
+                ? "Oldest"
+                : "Duration"}
             </Text>
             <Ionicons name="chevron-down" size={16} color="#007AFF" />
           </TouchableOpacity>
@@ -312,7 +346,7 @@ const AlertsScreen = () => {
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
-            trackColor={{ false: '#f2f2f7', true: '#007AFF' }}
+            trackColor={{ false: "#f2f2f7", true: "#007AFF" }}
           />
         </View>
       </View>
@@ -322,7 +356,11 @@ const AlertsScreen = () => {
         data={filteredAlerts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <AlertItem alert={item} onDismiss={dismissAlert} />
+          <AlertItem
+            alert={item}
+            onDismiss={dismissAlert}
+            onPress={handleAlertPress}
+          />
         )}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={fetchAlerts} />
@@ -332,10 +370,9 @@ const AlertsScreen = () => {
             <Ionicons name="checkmark-circle" size={64} color="#34C759" />
             <Text style={styles.emptyTitle}>No Alerts</Text>
             <Text style={styles.emptySubtitle}>
-              {filter === 'all' 
-                ? 'No parking violations detected'
-                : `No violations found for ${filter} filter`
-              }
+              {filter === "all"
+                ? "No parking violations detected"
+                : `No violations found for ${filter} filter`}
             </Text>
           </View>
         )}
@@ -369,21 +406,21 @@ const AlertsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
   },
   centered: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerStats: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
+    flexDirection: "row",
+    backgroundColor: "white",
     padding: 16,
     marginHorizontal: 16,
     marginTop: 16,
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -391,16 +428,16 @@ const styles = StyleSheet.create({
   },
   statItem: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
   },
   statNumber: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1c1c1e',
+    fontWeight: "bold",
+    color: "#1c1c1e",
   },
   statLabel: {
     fontSize: 12,
-    color: '#8e8e93',
+    color: "#8e8e93",
     marginTop: 4,
   },
   filtersContainer: {
@@ -414,57 +451,57 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
   sortContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   sortLabel: {
     fontSize: 14,
-    color: '#48484a',
+    color: "#48484a",
     marginRight: 8,
   },
   sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#f2f2f7',
+    backgroundColor: "#f2f2f7",
     borderRadius: 8,
   },
   sortButtonText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: "#007AFF",
     marginRight: 4,
   },
   notificationToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   toggleLabel: {
     fontSize: 14,
-    color: '#48484a',
+    color: "#48484a",
     marginRight: 8,
   },
   alertsList: {
     flex: 1,
   },
   alertItem: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
+    flexDirection: "row",
+    backgroundColor: "white",
     padding: 16,
     marginHorizontal: 16,
     marginBottom: 8,
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -472,40 +509,51 @@ const styles = StyleSheet.create({
   },
   alertIcon: {
     marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   alertContent: {
     flex: 1,
   },
   alertTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1c1c1e',
+    fontWeight: "600",
+    color: "#1c1c1e",
     marginBottom: 4,
   },
   alertLocation: {
     fontSize: 14,
-    color: '#48484a',
+    color: "#48484a",
     marginBottom: 2,
   },
   alertDescription: {
     fontSize: 14,
-    color: '#8e8e93',
+    color: "#8e8e93",
     marginBottom: 4,
   },
   alertTime: {
     fontSize: 12,
-    color: '#8e8e93',
+    color: "#8e8e93",
+  },
+  tapHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  tapHintText: {
+    fontSize: 11,
+    color: "#007AFF",
+    marginLeft: 4,
+    fontWeight: "500",
   },
   alertActions: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   alertDuration: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF3B30',
+    fontWeight: "bold",
+    color: "#FF3B30",
     marginBottom: 8,
   },
   dismissButton: {
@@ -513,49 +561,49 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 64,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1c1c1e',
+    fontWeight: "bold",
+    color: "#1c1c1e",
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#8e8e93',
-    textAlign: 'center',
+    color: "#8e8e93",
+    textAlign: "center",
     marginTop: 8,
   },
   actionButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 16,
     gap: 12,
   },
   actionButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 16,
     borderRadius: 12,
   },
   refreshButton: {
-    backgroundColor: '#f2f2f7',
+    backgroundColor: "#f2f2f7",
   },
   refreshButtonText: {
-    color: '#007AFF',
-    fontWeight: '600',
+    color: "#007AFF",
+    fontWeight: "600",
     marginLeft: 8,
   },
   clearButton: {
-    backgroundColor: '#ffebee',
+    backgroundColor: "#ffebee",
   },
   clearButtonText: {
-    color: '#FF3B30',
-    fontWeight: '600',
+    color: "#FF3B30",
+    fontWeight: "600",
     marginLeft: 8,
   },
 });

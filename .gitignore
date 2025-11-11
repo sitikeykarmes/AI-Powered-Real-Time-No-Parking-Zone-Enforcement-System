@@ -93,3 +93,8 @@ backend/videos/
 *.h5
 *.pt
 *.pkl
+
+
+backend/videos/
+mobile-app/node_modules/
+node_modules/
