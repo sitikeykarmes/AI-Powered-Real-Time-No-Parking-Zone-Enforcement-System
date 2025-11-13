@@ -47,7 +47,7 @@
       "expo-video"
     ],
     "extra": {
-      "backendUrl": "http://172.20.10.3:8001"
+      "backendUrl": "http://192.168.33.6:8001"
     },
     "notification": {
       "icon": "./assets/icon.png",

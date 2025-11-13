@@ -1,10 +1,13 @@
 # server.py - Auto-detect videos from folder
+
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import requests
+
 import os
 import logging
 import json
@@ -308,6 +311,14 @@ async def process_video_frame(request: VideoFrameProcessRequest):
                 'video_name': video_name,
                 'timestamp': time.time()
             })
+            # --- Trigger Pico 2 W buzzer ---
+            pico_ip = "172.20.10.2"  # <-- replace with your Pico's IP
+            try:
+                requests.get(f"http://{pico_ip}/alarm", timeout=2)
+                logger.info("Buzzer triggered for new alert (video frame).")
+            except Exception as e:
+                logger.warning(f"Failed to trigger Pico buzzer: {e}")
+            # --------------------------------
 
         return result
 
@@ -352,6 +363,14 @@ async def process_frame_endpoint(request: FrameProcessRequest):
                 'data': result['new_alerts'],
                 'timestamp': time.time()
             })
+            # --- Trigger Pico 2 W buzzer ---
+            pico_ip = "172.20.10.2"  # <-- replace with your Pico's IP
+            try:
+                requests.get(f"http://{pico_ip}/alarm", timeout=2)
+                logger.info("Buzzer triggered for new alert (frame upload).")
+            except Exception as e:
+                logger.warning(f"Failed to trigger Pico buzzer: {e}")
+            # --------------------------------
 
         return result
 
