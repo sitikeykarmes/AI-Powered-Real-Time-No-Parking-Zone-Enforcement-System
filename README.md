@@ -58,7 +58,7 @@ A React Native mobile application for real-time CCTV parking detection and monit
 
 Connects to existing FastAPI backend:
 
-- **Base URL**: `https://mobile-backend-sync.preview.emergentagent.com`
+- **Base URL**: ``
 - **API Endpoints**:
   - `GET /api/videos` - Available video feeds
   - `GET /api/video/{name}` - Video stream
@@ -70,18 +70,51 @@ Connects to existing FastAPI backend:
 
 ### Prerequisites
 
-- Node.js 16+
-- Expo CLI
-- iOS Simulator (Mac) or Android Emulator
-- Expo Go app (for physical device testing)
+- Vscode
+- MongoDB - https://www.mongodb.com/try/download/community
+  Download MongoDB and Install it.
+- Expo Go App(in Mobile - Playstore) - for Physical Testing
+
+### Setup
+
+1. **Clone this Repo**:
+
+- Open Vscode
+
+```bash
+git clone https://github.com/sitikeykarmes/AI-Powered-Real-Time-No-Parking-Zone-Enforcement-System.git
+```
+
+### Backend Setup
+
+1. **Navigate to Backend Directory**:
+
+   ```bash
+   cd backend
+   ```
+
+2. **Install libraries**:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Create a 'videos' folder in Backend Folder**:
+
+   ```bash
+   mkdir videos
+   ```
+
+   - Paste all your test videos in this 'videos' folder
 
 ### Development Setup
 
-1. **Navigate to mobile app directory**:
+1. **Navigate to mobile-app directory**:
 
-   ```bash
-   cd /app/mobile-app
-   ```
+- Go back to Root Directory and then:
+  ```bash
+  cd mobile-app
+  ```
 
 2. **Install dependencies**:
 
@@ -89,18 +122,39 @@ Connects to existing FastAPI backend:
    npm install
    ```
 
-3. **Start development server**:
+3. **Go to Windows Search, Open Command Prompt and Type**:
 
    ```bash
-   npm start
-   # or
-   expo start
+   ipconfig
    ```
 
-4. **Run on device/simulator**:
-   - **iOS**: `npm run ios` (Mac only)
-   - **Android**: `npm run android`
-   - **Web**: `npm run web`
+   - You will see
+
+   ```bash
+   IPv4 Address. . . . . . . . . . . : 172.20.162.71
+   ```
+
+   Copy this : 172.20.162.71 (Will be different for your Network)
+
+4. **Find app.json in mobile-app**:
+
+   - Scroll Down, You will see:
+
+   ```bash
+   "extra": {
+      "backendUrl": "http://192.168.33.6:8001"
+    },
+   ```
+
+   Just replace the 192.168.33.6 to 172.20.162.71(which you copied from Command Prompt)
+
+5. **Start development server**:
+
+   ```bash
+   npx expo start
+   ```
+
+6. **Run on device/simulator**:
    - **Physical Device**: Scan QR code with Expo Go app
 
 ## Project Structure
@@ -120,7 +174,7 @@ mobile-app/
 │   ├── services/
 │   │   └── api.js                  # Backend API integration
 │   └── utils/
-│       └── notifications.js        # Notification service
+│       └── notifications.js        # Notification
 ├── App.js                          # Main app component
 ├── app.json                        # Expo configuration
 └── package.json                    # Dependencies
@@ -177,12 +231,12 @@ mobile-app/
 npm run web
 ```
 
-Access at: `http://localhost:19006`
+Access at: `http://localhost:8001`
 
 ### Device Testing
 
 1. Install Expo Go from App Store/Play Store
-2. Scan QR code from `expo start`
+2. Scan QR code from `npx expo start`
 3. Test all features on physical device
 
 ### Simulator Testing
@@ -221,7 +275,7 @@ expo build:android --release-channel production
 Backend URL configured in `src/services/api.js`:
 
 ```javascript
-const BACKEND_URL = "https://mobile-backend-sync.preview.emergentagent.com";
+const BACKEND_URL = "https://localhost:8001";
 ```
 
 ### Notification Setup
