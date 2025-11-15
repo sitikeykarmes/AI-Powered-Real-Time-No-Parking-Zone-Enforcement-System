@@ -334,3 +334,5 @@ For technical issues or questions:
 ## License
 
 Integrated with existing Smart Parking Detection System.
+
+For Contact: kartikey8025@gmail.com and shambhavi.k2020@gmail.com
